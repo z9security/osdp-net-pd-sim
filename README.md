@@ -1,30 +1,12 @@
 # OSDP PD Simulator
 
-HTTP-controllable OSDP Peripheral Device (PD) simulator built on [OSDP.Net](https://github.com/bytedreamer/OSDP.Net). Designed for E2E integration testing of access control systems.
-
-## Architecture
-
-This is one component in a three-part E2E test stack:
-
-1. **Host server** (e.g., real-bs Rails app) -- speaks Z9 Open Community Protocol over TCP, sends config and receives events
-2. **Aporta** (.NET controller) -- connects to host via protobuf TCP, connects to this PD sim via OSDP over TCP
-3. **This project** (OSDP PD Sim) -- simulates a card reader/door hardware, controllable via HTTP REST API
-
-```
- Host (real-bs)           Aporta              OSDP PD Sim
- +-----------+     protobuf/TCP      +----------+    OSDP/TCP    +----------+
- | Rails app | <------ 9723 -------> | .NET     | <--- 9843 ---> | This     |
- | port 3000 |                       | controller|               | project  |
- +-----------+                       +----------+                | port 5230|
-                                                                 +----------+
-                                                          HTTP control: 5230
-```
+HTTP-controllable OSDP Peripheral Device (PD) simulator built on [OSDP.Net](https://github.com/bytedreamer/OSDP.Net). Useful for integration testing any access control system that speaks OSDP.
 
 ## What It Does
 
 - Listens for OSDP connections on a configurable TCP port (default 9843)
 - Responds to OSDP polls, ID reports, and capability queries
-- Exposes an HTTP API for tests to inject card reads, keypad entries, and input status changes
+- Exposes an HTTP API to inject card reads, keypad entries, and input status changes
 - Tracks received OSDP commands (output control, LED, buzzer) for test assertions
 
 ## HTTP API
@@ -33,7 +15,8 @@ This is one component in a three-part E2E test stack:
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/card-read` | Simulate a card read |
+| `POST` | `/card-read` | Simulate a raw card read (cardNumber + bitCount) |
+| `POST` | `/card-read-wiegand26` | Simulate a 26-bit Wiegand card read (facilityCode + cardNumber) |
 | `POST` | `/keypad` | Simulate a keypad PIN entry |
 | `POST` | `/input-status` | Set input status (door contact, REX) |
 | `GET`  | `/status` | Get device connection status |
@@ -43,7 +26,12 @@ This is one component in a three-part E2E test stack:
 ### Examples
 
 ```bash
-# Simulate a 26-bit Wiegand card read
+# Simulate a 26-bit Wiegand card read (facility code 100, card 12345)
+curl -X POST http://localhost:5230/card-read-wiegand26 \
+  -H "Content-Type: application/json" \
+  -d '{"facilityCode": 100, "cardNumber": 12345, "readerNumber": 0}'
+
+# Simulate a raw card read (bit-level)
 curl -X POST http://localhost:5230/card-read \
   -H "Content-Type: application/json" \
   -d '{"cardNumber": 12345, "bitCount": 26, "readerNumber": 0}'
