@@ -5,6 +5,7 @@ using OSDP.Net.Model;
 using OSDP.Net.Model.CommandData;
 using OSDP.Net.Model.ReplyData;
 using ReplyDeviceCapabilities = OSDP.Net.Model.ReplyData.DeviceCapabilities;
+using ReplyLocalStatus = OSDP.Net.Model.ReplyData.LocalStatus;
 
 namespace OsdpPdSim;
 
@@ -37,6 +38,33 @@ public class SimDevice : Device
         EnqueuePollReply(new RawCardData(readerNumber, FormatCode.NotSpecified, new BitArray(data)));
     }
 
+    public void QueueWiegand26CardRead(int facilityCode, int cardNumber, byte readerNumber)
+    {
+        var bits = new BitArray(26);
+
+        // Bits 1-8: facility code (MSB at bit 1)
+        for (int i = 0; i < 8; i++)
+            bits[1 + i] = ((facilityCode >> (7 - i)) & 1) == 1;
+
+        // Bits 9-24: card number (MSB at bit 9)
+        for (int i = 0; i < 16; i++)
+            bits[9 + i] = ((cardNumber >> (15 - i)) & 1) == 1;
+
+        // Bit 0: even parity over bits 1-12
+        int count1 = 0;
+        for (int i = 1; i <= 12; i++)
+            if (bits[i]) count1++;
+        bits[0] = (count1 % 2) != 0;
+
+        // Bit 25: odd parity over bits 13-24
+        int count2 = 0;
+        for (int i = 13; i <= 24; i++)
+            if (bits[i]) count2++;
+        bits[25] = (count2 % 2) == 0;
+
+        EnqueuePollReply(new RawCardData(readerNumber, FormatCode.NotSpecified, bits));
+    }
+
     public void QueueKeypad(string digits, byte readerNumber)
     {
         EnqueuePollReply(new KeypadData(readerNumber, digits));
@@ -44,7 +72,15 @@ public class SimDevice : Device
 
     protected override PayloadData HandleIdReport()
     {
-        return base.HandleIdReport();
+        return new DeviceIdentification(
+            vendorCode: [0x00, 0x00, 0x01],
+            modelNumber: 0x01,
+            version: 0x01,
+            serialNumber: 1001,
+            firmwareMajor: 1,
+            firmwareMinor: 0,
+            firmwareBuild: 1
+        );
     }
 
     protected override PayloadData HandleDeviceCapabilities()
@@ -67,6 +103,11 @@ public class SimDevice : Device
             s ? InputStatusValue.Active : InputStatusValue.Inactive).ToArray());
     }
 
+    protected override PayloadData HandleLocalStatusReport()
+    {
+        return new ReplyLocalStatus(tamper: false, powerFailure: false);
+    }
+
     protected override PayloadData HandleOutputStatusReport()
     {
         return new OutputStatus([false, false]);
@@ -83,14 +124,14 @@ public class SimDevice : Device
     {
         _receivedCommands.Enqueue(new ReceivedCommand("osdp_LED", DateTime.UtcNow,
             "LED control received"));
-        return base.HandleReaderLEDControl(commandPayload);
+        return new Ack();
     }
 
     protected override PayloadData HandleBuzzerControl(ReaderBuzzerControl commandPayload)
     {
         _receivedCommands.Enqueue(new ReceivedCommand("osdp_BUZ", DateTime.UtcNow,
             "Buzzer control received"));
-        return base.HandleBuzzerControl(commandPayload);
+        return new Ack();
     }
 
     private static byte[] EncodeCardNumber(int cardNumber, int bitCount)

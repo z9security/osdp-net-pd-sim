@@ -32,6 +32,12 @@ app.MapPost("/card-read", (CardReadRequest req) =>
     return Results.Ok(new { queued = true });
 });
 
+app.MapPost("/card-read-wiegand26", (Wiegand26Request req) =>
+{
+    device.QueueWiegand26CardRead(req.FacilityCode, req.CardNumber, req.ReaderNumber);
+    return Results.Ok(new { queued = true });
+});
+
 app.MapPost("/keypad", (KeypadRequest req) =>
 {
     device.QueueKeypad(req.Digits, req.ReaderNumber);
@@ -57,5 +63,6 @@ app.Run();
 // -- Request DTOs --
 
 record CardReadRequest(int CardNumber, int BitCount = 26, byte ReaderNumber = 0);
+record Wiegand26Request(int FacilityCode, int CardNumber, byte ReaderNumber = 0);
 record KeypadRequest(string Digits, byte ReaderNumber = 0);
 record InputStatusRequest(bool[] Inputs);
